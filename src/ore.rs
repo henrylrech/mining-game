@@ -20,11 +20,10 @@ impl Ore {
     }
 
     pub fn mine(&mut self, money: &mut u32) {
+        if self.locked {
+            return
+        }
         self.count += 1;
         *money += self.value;
-    }
-
-    pub fn unlock(&mut self) {
-        self.locked = false;
     }
 }

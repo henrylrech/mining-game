@@ -18,18 +18,20 @@ pub struct App {
     ores: Vec<Ore>,
     state: AppState,
     selected_tab: SelectedTab,
+    key_locked: bool,
 }
 
 impl Default for App {
     fn default() -> Self {
         Self {
             ores: vec![
-                Ore::new("Coal", 5, KeyCode::Char('c'), false),
+                Ore::new("Coal", 1, KeyCode::Char('c'), false),
                 Ore::new("Iron", 10, KeyCode::Char('i'), true),
             ],
             money: 0,
             state: AppState::Running,
-            selected_tab: SelectedTab::Cave
+            selected_tab: SelectedTab::Cave,
+            key_locked: false
         }
     }
 }
@@ -61,22 +63,29 @@ impl App {
 
     fn handle_events(&mut self) -> std::io::Result<()> {
         if let Event::Key(key) = event::read()? {
-            if key.kind == KeyEventKind::Press {
-                for ore in self.ores.iter_mut() {
-                    if key.code == ore.char {
-                        ore.mine(&mut self.money);
-                        return Ok(());
-                    }
-                }
+            match key.kind {
+                KeyEventKind::Release => self.key_locked = false,
+                KeyEventKind::Press if !self.key_locked => {
+                    self.key_locked = true;
 
-                match key.code {
-                    KeyCode::Right => self.next_tab(),
-                    KeyCode::Left => self.previous_tab(),
-                    KeyCode::Char('q') | KeyCode::Esc => self.quit(),
-                    _ => {}
-                }
+                    for ore in self.ores.iter_mut() {
+                        if key.code == ore.char {
+                            ore.mine(&mut self.money);
+                            return Ok(());
+                        }
+                    }
+
+                    match key.code {
+                        KeyCode::Right => self.next_tab(),
+                        KeyCode::Left => self.previous_tab(),
+                        KeyCode::Char('q') | KeyCode::Esc => self.quit(),
+                        _ => {}
+                    }
+                },
+                _ => {}
             }
         }
+
         Ok(())
     }
 
@@ -158,23 +167,14 @@ fn render_footer(area: Rect, buf: &mut Buffer, selected_tab: SelectedTab) {
         .render(area, buf)
 }
 
-// impl Widget for SelectedTab {
-//     fn render(self, area: Rect, buf: &mut Buffer) {
-//         // in a real app these might be separate widgets
-//         match self {
-//             Self::Cave => self.render_tab0(area, buf),
-//             Self::Shop => self.render_tab1(area, buf),
-//         }
-//     }
-// }
-
 fn ore_line(ore: &Ore) -> Line<'_>{
 
     let line: Line<'_> = Line::from(vec![
         Span::styled(format!("{} | ", ore.char), Style::default().fg(Color::Blue)),
         Span::styled(ore.name.as_str(), Style::default().fg(Color::White)),
         Span::styled(format!(" | Amount: {}", ore.count), Style::default()),
-        Span::styled(format!(" | Value: {}", ore.value), Style::default().fg(Color::Yellow)),
+        Span::styled(format!(" | Value: {} ", ore.value), Style::default().fg(Color::Yellow)),
+        Span::styled("⛏️", Style::default()),
     ]);
 
     line
