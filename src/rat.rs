@@ -6,32 +6,29 @@ use ratatui::{
     style::{palette::tailwind, Color, Style, Stylize},
     symbols,
     text::{Line, Span, Text},
-    widgets::{Block, Padding, Paragraph, Tabs, Widget},
+    widgets::{Block, List, ListDirection, Padding, Paragraph, Tabs, Widget},
     DefaultTerminal,
 };
 use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
 
-use crate::ore::Ore;
+use crate::{ore::{starting_ores, Ore}, shop::{starting_upgrades, Upgrade}};
 
 pub struct App {
     money: u32,
     ores: Vec<Ore>,
+    upgrades: Vec<Upgrade>,
     state: AppState,
-    selected_tab: SelectedTab,
-    key_locked: bool,
+    selected_tab: SelectedTab
 }
 
 impl Default for App {
     fn default() -> Self {
         Self {
-            ores: vec![
-                Ore::new("Coal", 1, KeyCode::Char('c'), false),
-                Ore::new("Iron", 10, KeyCode::Char('i'), true),
-            ],
+            ores: starting_ores(),
+            upgrades: starting_upgrades(),
             money: 0,
             state: AppState::Running,
-            selected_tab: SelectedTab::Cave,
-            key_locked: false
+            selected_tab: SelectedTab::Cave
         }
     }
 }
@@ -64,15 +61,18 @@ impl App {
     fn handle_events(&mut self) -> std::io::Result<()> {
         if let Event::Key(key) = event::read()? {
             match key.kind {
-                KeyEventKind::Release => self.key_locked = false,
-                KeyEventKind::Press if !self.key_locked => {
-                    self.key_locked = true;
+                KeyEventKind::Press => {
 
-                    for ore in self.ores.iter_mut() {
-                        if key.code == ore.char {
-                            ore.mine(&mut self.money);
-                            return Ok(());
-                        }
+                    match self.selected_tab {
+                        SelectedTab::Cave => {
+                            for ore in self.ores.iter_mut() {
+                                if key.code == ore.char {
+                                    ore.mine(&mut self.money);
+                                    return Ok(());
+                                }
+                            }
+                        },
+                        SelectedTab::Shop => {},
                     }
 
                     match key.code {
@@ -132,7 +132,7 @@ impl Widget for &App {
 
         match self.selected_tab {
             SelectedTab::Cave => self.selected_tab.render_cave(inner_area, buf, &self.ores),
-            SelectedTab::Shop => self.selected_tab.render_shop(inner_area, buf),
+            SelectedTab::Shop => self.selected_tab.render_shop(inner_area, buf, &self.upgrades, &self.money),
         }
         render_footer(footer_area, buf, self.selected_tab);
     }
@@ -180,6 +180,16 @@ fn ore_line(ore: &Ore) -> Line<'_>{
     line
 }
 
+fn upgr_line(upgrade: &Upgrade) -> Line<'_>{
+
+    let line: Line<'_> = Line::from(vec![
+        Span::styled(upgrade.desc.as_str(), Style::default().fg(Color::White)),
+        Span::styled(format!(" | Cost: {}", upgrade.cost), Style::default().fg(Color::Blue)),
+    ]);
+
+    line
+}
+
 impl SelectedTab {
     /// Return tab's name as a styled `Line`
     fn title(self) -> Line<'static> {
@@ -204,9 +214,34 @@ impl SelectedTab {
             .render(area, buf);
     }
 
-    fn render_shop(self, area: Rect, buf: &mut Buffer) {
-        Paragraph::new("Welcome to the shop!")
+    fn render_shop(self, area: Rect, buf: &mut Buffer, upgrades: &Vec<Upgrade>, money: &u32) {
+        let mut lines: Vec<Line<'_>> = vec![];
+
+        let mut zero_available = true;
+        for upgr in upgrades {
+            if upgr.can_show(*money) {
+                zero_available = false;
+                lines.push(upgr_line(upgr))
+            }
+        }
+
+        if zero_available {
+            lines.push(Line::from(vec![
+                Span::styled("No upgrades available... Try mining a bit more!", Style::default().fg(Color::Red)),
+            ]));
+        }
+
+        //let text = Text::from(lines);
+
+        /*Paragraph::new(text)
             .block(self.block())
+            .render(area, buf);*/
+
+        List::new(lines)
+            .block(self.block())
+            .highlight_symbol(">>")
+            .repeat_highlight_symbol(true)
+            .direction(ListDirection::TopToBottom)
             .render(area, buf);
     }
 
