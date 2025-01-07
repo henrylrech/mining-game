@@ -1,3 +1,5 @@
+use std::{thread, time::Duration};
+
 use color_eyre::Result;
 use ratatui::{
     buffer::Buffer,
@@ -11,7 +13,7 @@ use ratatui::{
 };
 use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
 
-use crate::{ore::{starting_ores, Ore}, shop::{starting_upgrades, Upgrade}};
+use crate::{ore::{starting_ores, Ore, OreType}, shop::{starting_upgrades, Upgrade, UpgradeType}};
 
 pub struct App {
     money: u32,
@@ -72,7 +74,21 @@ impl App {
                                 }
                             }
                         },
-                        SelectedTab::Shop => {},
+                        SelectedTab::Shop => {
+                            match key.code {
+                                KeyCode::Char('0') => self.buy_upgrade(0),
+                                KeyCode::Char('1') => self.buy_upgrade(1),
+                                KeyCode::Char('2') => self.buy_upgrade(2),
+                                KeyCode::Char('3') => self.buy_upgrade(3),
+                                KeyCode::Char('4') => self.buy_upgrade(4),
+                                KeyCode::Char('5') => self.buy_upgrade(5),
+                                KeyCode::Char('6') => self.buy_upgrade(6),
+                                KeyCode::Char('7') => self.buy_upgrade(7),
+                                KeyCode::Char('8') => self.buy_upgrade(8),
+                                KeyCode::Char('9') => self.buy_upgrade(9),
+                                _ => {}
+                            }
+                        },
                     }
 
                     match key.code {
@@ -95,6 +111,52 @@ impl App {
 
     pub fn previous_tab(&mut self) {
         self.selected_tab = self.selected_tab.previous();
+    }
+
+    fn start_auto_miners(&mut self) {
+        for ore in self.ores.iter_mut() {
+            thread::spawn(move || {
+                loop {
+                    ore.mine(&mut self.money);
+                    thread::sleep(Duration::from_secs(5));
+                }
+            });
+        }
+    }
+
+    fn buy_upgrade(&mut self, index: u8) {
+        let mut cont: u8 = 0;
+        let mut upgrtype_to_buy: Option<UpgradeType> = None;
+        let mut ore_to_upgrade: Option<OreType> = None;
+        for upgr in self.upgrades.iter_mut() {
+            if upgr.visible(self.money) {
+                if cont == index {
+                    let res = upgr.buy(&mut self.money);
+                    if res.is_ok() {
+                        upgrtype_to_buy = Some(upgr.upgrade_type.clone());
+                        ore_to_upgrade = Some(upgr.ore_type.clone());
+                        break;
+                    }
+                } else {
+                    cont += 1;
+                }
+            }
+        }
+
+        if let (Some(upgrtype), Some(ore)) = (upgrtype_to_buy, ore_to_upgrade) {
+            self.do_upgrade(&upgrtype, &ore);
+        }
+    }
+
+    fn do_upgrade(&mut self, upgrade_type: &UpgradeType, ore_type: &OreType) -> Option<()> {
+        for ore in self.ores.iter_mut() {
+            if ore.ore_type == *ore_type {
+                ore.upgrade(&upgrade_type);
+                return Some(());
+            }
+        }
+
+        None
     }
 
     pub fn quit(&mut self) {
@@ -158,8 +220,8 @@ fn render_title(area: Rect, buf: &mut Buffer, money: u32) {
 
 fn render_footer(area: Rect, buf: &mut Buffer, selected_tab: SelectedTab) {
     let footer = match selected_tab {
-        SelectedTab::Cave => "◄ ► to change tab | Press esc to quit",
-        SelectedTab::Shop => "◄ ► to change tab | Press esc to quit",
+        SelectedTab::Cave => "◄ ► to change tab | Press q to quit",
+        SelectedTab::Shop => "◄ ► to change tab | Press q to quit",
     };
 
     Line::raw(footer)
@@ -174,15 +236,16 @@ fn ore_line(ore: &Ore) -> Line<'_>{
         Span::styled(ore.name.as_str(), Style::default().fg(Color::White)),
         Span::styled(format!(" | Amount: {}", ore.count), Style::default()),
         Span::styled(format!(" | Value: {} ", ore.value), Style::default().fg(Color::Yellow)),
-        Span::styled("⛏️", Style::default()),
+        Span::styled("⛏️".repeat(ore.auto_miners.try_into().unwrap()), Style::default()),
     ]);
 
     line
 }
 
-fn upgr_line(upgrade: &Upgrade) -> Line<'_>{
+fn upgr_line(upgrade: &Upgrade, count: u8) -> Line<'_>{
 
     let line: Line<'_> = Line::from(vec![
+        Span::styled(format!("{} - ", count.to_string()), Style::default().fg(Color::Red)),
         Span::styled(upgrade.desc.as_str(), Style::default().fg(Color::White)),
         Span::styled(format!(" | Cost: {}", upgrade.cost), Style::default().fg(Color::Blue)),
     ]);
@@ -218,10 +281,12 @@ impl SelectedTab {
         let mut lines: Vec<Line<'_>> = vec![];
 
         let mut zero_available = true;
+        let mut cont: u8 = 0;
         for upgr in upgrades {
-            if upgr.can_show(*money) {
+            if upgr.visible(*money) {
                 zero_available = false;
-                lines.push(upgr_line(upgr))
+                lines.push(upgr_line(upgr, cont));
+                cont += 1;
             }
         }
 
@@ -231,12 +296,6 @@ impl SelectedTab {
             ]));
         }
 
-        //let text = Text::from(lines);
-
-        /*Paragraph::new(text)
-            .block(self.block())
-            .render(area, buf);*/
-
         List::new(lines)
             .block(self.block())
             .highlight_symbol(">>")
@@ -245,7 +304,6 @@ impl SelectedTab {
             .render(area, buf);
     }
 
-    /// A block surrounding the tab's content
     fn block(self) -> Block<'static> {
         Block::bordered()
             .border_set(symbols::border::PROPORTIONAL_TALL)

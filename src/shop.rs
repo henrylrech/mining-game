@@ -19,23 +19,24 @@ impl Upgrade {
         }
     }
 
-    pub fn can_show(&self, money:u32) -> bool {
-        if !self.bought && self.cost < money * 10 {
+    pub fn visible(&self, money: u32) -> bool {
+        if !self.bought && self.cost < money * 2 {
             true
         } else {
             false
         }
     }
 
-    pub fn buy(&mut self, money: &mut u32) {
+    pub fn buy(&mut self, money: &mut u32) -> Result<(), ()> {
         if self.cost < *money {
             self.bought = true;
             *money -= self.cost;
-
+            return Ok(());
         }
+        Err(())
     }
 }
-
+#[derive(Clone)]
 pub enum UpgradeType {
     AutoMine,
     DoubleValue,
@@ -45,6 +46,19 @@ pub enum UpgradeType {
 pub fn starting_upgrades() -> Vec<Upgrade> {
     vec![
         Upgrade::new("coal double value", OreType::Coal, 110, UpgradeType::DoubleValue),
-        Upgrade::new("unlock iron", OreType::Iron, 110, UpgradeType::UnlockOre)
+        Upgrade::new("unlock iron", OreType::Iron, 450, UpgradeType::UnlockOre),
+        Upgrade::new("iron double value", OreType::Iron, 1200, UpgradeType::DoubleValue),
+        Upgrade::new("unlock platinum", OreType::Platinum, 2600, UpgradeType::UnlockOre),
+        Upgrade::new("platinum double value", OreType::Platinum, 5500, UpgradeType::DoubleValue),
+        Upgrade::new("unlock emerald", OreType::Emerald, 10800, UpgradeType::UnlockOre),
+        Upgrade::new("emerald double value", OreType::Emerald, 14700, UpgradeType::DoubleValue),
+        Upgrade::new("unlock ruby", OreType::Ruby, 30400, UpgradeType::UnlockOre),
+        Upgrade::new("ruby double value", OreType::Ruby, 35600, UpgradeType::DoubleValue),
+        Upgrade::new("unlock sapphire", OreType::Sapphire, 50900, UpgradeType::UnlockOre),
+        Upgrade::new("sapphire double value", OreType::Sapphire, 75500, UpgradeType::DoubleValue),
+        Upgrade::new("unlock gold", OreType::Gold, 102000, UpgradeType::UnlockOre),
+        Upgrade::new("gold double value", OreType::Gold, 140400, UpgradeType::DoubleValue),
+        Upgrade::new("unlock diamond", OreType::Diamond, 200000, UpgradeType::UnlockOre),
+        Upgrade::new("diamond double value", OreType::Diamond, 220000, UpgradeType::DoubleValue),
     ]
 }

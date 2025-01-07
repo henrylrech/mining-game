@@ -5,6 +5,7 @@ mod shop;
 
 fn main() {
     let terminal = ratatui::init();
-    let _ = App::default().run(terminal);
+    let app = App::default();
+    let _ = app.run(terminal);
     ratatui::restore();
 }
